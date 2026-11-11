@@ -84,6 +84,12 @@ rec {
     };
   };
 
+  quartus-env = mkWrapper {
+    name = "quartus-env";
+    script = ../tools/intel/quartus-env.sh;
+    description = "Run a command with the selected Quartus inside the Quartus shell.";
+  };
+
   program-fpga = pkgs.writeShellApplication {
     name = "program-fpga";
     runtimeInputs = [
@@ -106,6 +112,7 @@ rec {
 
   all = [
     quartus
+    quartus-env
     program-fpga
   ];
 }

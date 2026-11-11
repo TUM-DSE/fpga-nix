@@ -127,6 +127,9 @@ needed:
   `quartus_asm`, `quartus_pgm`, `quartus_cpf`, `quartus_pfg`, `quartus_eda`,
   `quartus_ipgenerate`, `quartus_pow`, `jtagconfig`, `jtagd`,
   `qsys-generate` and `qsys-script`
+- `quartus-env <command>`, which runs any command with the selected
+  installation inside the Quartus shell, for projects that build through
+  their own scripts
 - `program-fpga`, which programs a `.sof` over JTAG with `quartus_pgm`, or
   writes a `.jic` to the board's configuration flash with `--write-flash`
 - `all`, a list of the packages above

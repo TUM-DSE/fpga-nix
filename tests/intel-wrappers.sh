@@ -63,6 +63,13 @@ expect_ok "$bin/qsys-generate" system.qsys
 expect_out "tool=qsys-generate"
 echo "PASS tool wrappers"
 
+# shellcheck disable=SC2016 # Expanded inside the Quartus shell.
+FPGA_NIX_QUARTUS_LICENSE_FILE=/licenses/site.dat expect_ok "$bin/quartus-env" \
+  bash -c 'echo "env=$QUARTUS_ROOTDIR $LM_LICENSE_FILE $1"' -- arg
+expect_out "env=$root/24.1/quartus /licenses/site.dat arg"
+expect_fail "Usage: quartus-env" "$bin/quartus-env"
+echo "PASS quartus-env"
+
 image="$work/top.sof"
 touch "$image"
 chain='1) Agilex 7 FPGA I-Series Development Kit [1-14]
