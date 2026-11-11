@@ -90,6 +90,15 @@ FPGA_PART_HINT=AGIB027 FPGA_JTAG_TARGET=1-4 expect_ok "$bin/program-fpga" "$imag
 expect_record "-c USB-BlasterII [1-4] -m jtag -o p;$image@1"
 echo "PASS ambiguous parts and cable filter"
 
+# The chain of the Agilex 7 dev kit as jtagconfig reports it on xavier.
+export FIXTURE_CHAIN='1) AGI FPGA Development Kit [1-14]
+  034BB0DD   AGIB027R29A(.|B|R0|R1|R3)/..
+  020D10DD   VTAP10
+'
+FPGA_PART_HINT=AGIB027 expect_ok "$bin/program-fpga" "$image"
+expect_record "-c AGI FPGA Development Kit [1-14] -m jtag -o p;$image@1"
+echo "PASS xavier's chain"
+
 FPGA_PART_HINT=XCU280 expect_fail "found 0" "$bin/program-fpga" "$image"
 FPGA_PART_HINT=AGIB027 expect_fail "must be a .sof" "$bin/program-fpga" "$work/top.bit"
 expect_fail "FPGA_PART_HINT is required" "$bin/program-fpga" "$image"

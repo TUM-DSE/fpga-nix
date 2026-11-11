@@ -58,6 +58,8 @@ matches=()
 cable=""
 position=0
 while IFS= read -r line; do
+  # Drop progress output that ends in a carriage return.
+  line="${line##*$'\r'}"
   if [[ "$line" =~ ^[0-9]+\)\ (.+)$ ]]; then
     cable="${BASH_REMATCH[1]}"
     position=0
