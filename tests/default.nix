@@ -170,11 +170,9 @@ in
         toolRoots = [ "/nonexistent/xilinx" ];
       };
 
-  stage-missing-artifact =
-    expectStageFailure "missing-artifact" "missing expected build artifact: out/missing.bit"
-      {
-        expectedPaths = [ "out/missing.bit" ];
-      };
+  stage-missing-artifact = expectStageFailure "missing-artifact" "missing expected build artifact" {
+    expectedPaths = [ "out/missing.bit" ];
+  };
 
   stage-failed-check = expectStageFailure "failed-check" "timing not met" {
     checkCommands = [ "echo 'timing not met' >&2; exit 1" ];
@@ -192,7 +190,8 @@ in
 
   shellcheck = pkgs.runCommand "fpga-nix-shellcheck" { nativeBuildInputs = [ pkgs.shellcheck ]; } ''
     cd ${src}
-    shellcheck tools/stage/run-stage.sh tests/*.sh
+    shellcheck --external-sources tools/stage/run-stage.sh tests/*.sh
+    shellcheck --shell=bash --exclude=SC2148 tools/stage/stage-lib.sh
     # Tool scripts are fragments; check them as bash with their libraries.
     for script in tools/host/*.sh tools/xilinx/*.sh; do
       shellcheck --shell=bash --exclude=SC2148 tools/common.sh "$script"

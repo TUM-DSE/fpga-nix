@@ -64,7 +64,7 @@ pkgs.stdenvNoCC.mkDerivation (
 
     buildPhase = ''
       runHook preBuild
-      bash ${../tools/stage/run-stage.sh} \
+      bash ${../tools/stage}/run-stage.sh \
         ${lines "tool-roots" (map toString toolRoots)} \
         ${pkgs.writeText "pre-build.sh" preBuild} \
         ${script "build-commands.sh" buildCommands} \
