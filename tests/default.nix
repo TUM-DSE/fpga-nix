@@ -114,6 +114,72 @@ let
     cores = 4;
   };
 
+  # A fake Quartus installation whose tools are all intel-fixture-tool.sh.
+  intelFixture = pkgs.runCommand "fpga-nix-intel-fixture" { } ''
+    tool() {
+      mkdir -p "$(dirname "$1")"
+      install -m755 ${./intel-fixture-tool.sh} "$1"
+    }
+    for name in quartus_sh quartus_syn quartus_sta quartus_pgm jtagconfig; do
+      tool "$out/24.1/quartus/bin/$name"
+    done
+    tool "$out/24.1/qsys/bin/qsys-generate"
+    patchShebangs "$out"
+  '';
+
+  fakeQuartusShell = pkgs.writeShellScriptBin "quartus-shell" ''
+    test "$1" = -c
+    command="$2"
+    shift 2
+    test "$1" = --
+    shift
+    exec ${pkgs.bash}/bin/bash -c "$command" -- "$@"
+  '';
+
+  intelTools = fpgaNixLib.mkIntelTools {
+    inherit pkgs;
+    quartusShareRoot = intelFixture;
+    quartusShell = fakeQuartusShell;
+  };
+
+  quartusSource =
+    qsfExtra:
+    pkgs.runCommand "fpga-nix-quartus-source" { } ''
+      mkdir -p "$out"
+      echo 'PROJECT_REVISION = "counter"' > "$out/counter.qpf"
+      {
+        echo 'set_global_assignment -name FAMILY "Agilex 7"'
+        echo 'set_global_assignment -name TOP_LEVEL_ENTITY top'
+        echo ${lib.escapeShellArg qsfExtra}
+      } > "$out/counter.qsf"
+    '';
+
+  mkQuartusStage =
+    args:
+    fpgaNixLib.mkQuartusStagePackage (
+      {
+        inherit pkgs intelTools;
+        quartusShareRoot = intelFixture;
+        quartusVersion = "24.1";
+        pname = "fpga-nix-quartus-fixture";
+        src = quartusSource "";
+        project = "counter";
+      }
+      // args
+    );
+
+  quartusStage = mkQuartusStage { };
+
+  expectQuartusFailure =
+    name: message: args:
+    let
+      failure = pkgs.testers.testBuildFailure (mkQuartusStage args);
+    in
+    pkgs.runCommand "fpga-nix-quartus-${name}" { } ''
+      grep -qF ${lib.escapeShellArg message} ${failure}/testBuildFailure.log
+      touch "$out"
+    '';
+
   # Each failing stage must fail with the given message in its build log.
   expectStageFailure =
     name: message: args:
@@ -193,7 +259,7 @@ in
     shellcheck --external-sources tools/stage/run-stage.sh tests/*.sh
     shellcheck --shell=bash --exclude=SC2148 tools/stage/stage-lib.sh
     # Tool scripts are fragments; check them as bash with their libraries.
-    for script in tools/host/*.sh tools/xilinx/*.sh; do
+    for script in tools/host/*.sh tools/xilinx/*.sh tools/intel/*.sh; do
       shellcheck --shell=bash --exclude=SC2148 tools/common.sh "$script"
     done
     touch "$out"
@@ -212,4 +278,44 @@ in
     fi
     touch "$out"
   '';
+}
+// lib.optionalAttrs pkgs.stdenv.hostPlatform.isx86_64 {
+  # Quartus and its shell only exist for x86_64-linux.
+  intel-wrappers = pkgs.runCommand "fpga-nix-intel-wrappers" { } ''
+    bash ${./intel-wrappers.sh} ${
+      pkgs.symlinkJoin {
+        name = "fpga-nix-intel-tools";
+        paths = intelTools.all;
+      }
+    }/bin ${intelFixture}
+    touch "$out"
+  '';
+
+  quartus-stage = pkgs.runCommand "fpga-nix-quartus-stage" { nativeBuildInputs = [ pkgs.jq ]; } ''
+    test -f ${quartusStage}/output_files/counter.sof
+    test -f ${quartusStage}/output_files/counter.fit.rpt
+    grep -qx 'setup slow clk 1.25' ${quartusStage}/output_files/counter.slack.txt
+    jq -e '.kind == "quartus-stage-execution" and .status == "completed"' \
+      ${quartusStage}/metadata/execution.json
+    touch "$out"
+  '';
+
+  quartus-negative-slack = expectQuartusFailure "negative-slack" "timing constraints are not met" {
+    env.FIXTURE_SLACK = "setup slow clk -0.2\n";
+  };
+
+  quartus-no-clocks = expectQuartusFailure "no-clocks" "no constrained clocks found" {
+    env.FIXTURE_SLACK = "";
+  };
+
+  quartus-output-directory = expectQuartusFailure "output-directory" "pass outputDirectory" {
+    src = quartusSource "set_global_assignment -name PROJECT_OUTPUT_DIRECTORY build";
+  };
+
+  quartus-unchecked-timing = mkQuartusStage {
+    env.FIXTURE_SLACK = "";
+    checkTiming = false;
+  };
+
+  quartus-shell = fpgaNixLib.mkQuartusShell { inherit pkgs; };
 }

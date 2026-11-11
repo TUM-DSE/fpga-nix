@@ -16,8 +16,8 @@ addresses and JTAG targets are passed in by the site flake.
 
 ## Status
 
-The Xilinx backend is ported from coyote-nix. Intel support (Quartus) is
-planned on top of the same interface. coyote-nix does not use fpga-nix yet.
+The Xilinx backend is ported from coyote-nix. The Intel backend runs Quartus
+Prime Pro and compiles, checks timing and programs regular Quartus projects.
 
 ## Library
 
@@ -26,6 +26,9 @@ fpga-nix.lib.mkXilinxTools
 fpga-nix.lib.mkHostTools
 fpga-nix.lib.mkStagePackage
 fpga-nix.lib.mkDevShell
+fpga-nix.lib.mkQuartusShell
+fpga-nix.lib.mkIntelTools
+fpga-nix.lib.mkQuartusStagePackage
 ```
 
 ### mkXilinxTools
@@ -107,6 +110,66 @@ fpga-nix.lib.mkDevShell {
 Adds common build utilities and, through the flake, the pinned
 [fpgahog](https://github.com/taugoust/fpgahog) for FPGA reservations.
 
+### mkIntelTools
+
+```nix
+intel = fpga-nix.lib.mkIntelTools {
+  inherit pkgs;
+  quartusShareRoot = "/share/intel-fpga/tools"; # one directory per version
+};
+```
+
+Returns wrappers that run Quartus Prime Pro from the installation inside an
+FHS environment built by `mkQuartusShell`, so no host-provided shell is
+needed:
+
+- `quartus`: `quartus_sh`, `quartus_syn`, `quartus_fit`, `quartus_sta`,
+  `quartus_asm`, `quartus_pgm`, `quartus_cpf`, `quartus_eda`,
+  `quartus_ipgenerate`, `quartus_pow`, `jtagconfig`, `jtagd`,
+  `qsys-generate` and `qsys-script`
+- `program-fpga`, which programs a `.sof` over JTAG with `quartus_pgm`
+- `all`, a list of the packages above
+
+As for Xilinx, `FPGA_NIX_QUARTUS_VERSION` must be set and selects the
+installation. `FPGA_NIX_QUARTUS_LICENSE_FILE` sets `LM_LICENSE_FILE`.
+
+`program-fpga` takes the same inputs as the Xilinx one. It reads the JTAG
+chains from `jtagconfig`, needs exactly one device whose name contains
+`FPGA_PART_HINT` (for example `AGIB027`) on the cables matching the optional
+`FPGA_JTAG_TARGET`, and takes a lock per cable. A dev shell should include one
+vendor's tool set, since both provide `program-fpga`.
+
+For FPGA designs with PCIe, pass the Intel vendor IDs to `mkHostTools`, for
+example `fpgaPciVendors = [ "0x1172" ]` (`0x1172` is the default vendor ID of
+Intel's PCIe IP).
+
+### mkQuartusStagePackage
+
+```nix
+fpga-nix.lib.mkQuartusStagePackage {
+  inherit pkgs;
+  intelTools = intel;
+  quartusShareRoot = "/share/intel-fpga/tools";
+  quartusVersion = "24.1";
+  pname = "my-design";
+  src = ./hw; # contains my_design.qpf and my_design.qsf
+  project = "my_design";
+}
+```
+
+Runs `quartus_sh --flow compile` and installs `output_files/` with the `.sof`
+and all reports. Quartus only writes there when the project sets
+`PROJECT_OUTPUT_DIRECTORY`, so the stage adds it to the revision's `.qsf` when
+it is missing and fails when the project uses another directory than
+`outputDirectory`. Afterwards the Timing Analyzer reports the worst slack per
+analysis, clock and operating condition into
+`output_files/<revision>.slack.txt`. The stage fails on negative slack or when
+no clock is constrained, unless `checkTiming = false`.
+
+Quartus Prime Pro needs a license for most device families. Without one,
+synthesis fails with "No license for family ...". Cyclone 10 GX needs no
+license and is useful for testing the flow.
+
 ## Vendor tools and the build sandbox
 
 Vendor tools are installed outside the Nix store. On Linux, a build only sees
@@ -134,6 +197,9 @@ an explanation instead of a tool error.
 | `FPGA_BDF` | `hot-reset` | PCI address of the FPGA |
 | `FPGA_NIX_PCI_VENDORS` | `hot-reset` | Accepted PCI vendor IDs |
 | `FPGA_NIX_BUILD_ROOT` | `program-fpga` | Log directory root |
+| `FPGA_NIX_QUARTUS_VERSION` | Quartus wrappers | Quartus version, required |
+| `FPGA_NIX_QUARTUS_LICENSE_FILE` | Quartus wrappers | License file |
+| `FPGA_NIX_QUARTUS_SHELL` | Quartus wrappers | Overrides the FHS shell |
 
 Each `FPGA_NIX_*` variable also accepts the older `COYOTE_NIX_*` name, so
 existing site flakes keep working while they move to the new names.
