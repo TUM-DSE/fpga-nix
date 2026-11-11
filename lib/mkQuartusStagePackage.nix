@@ -21,6 +21,12 @@
   # Shell commands that produce <outputDirectory>/<revision>.sof.
   buildCommands ? [ "quartus_sh --flow compile ${project} -c ${revision}" ],
   checkTiming ? true,
+  # Also write a flash image (<revision>.jic) for the board's configuration
+  # flash, as { device, flashLoader, mode ? "ASX4" }: the flash part (for
+  # example MT25QU02G), the FPGA part that acts as flash loader and the
+  # configuration mode. The mode must match the project's
+  # CONFIGURATION_SCHEME, or quartus_pfg rejects the .sof.
+  flashImage ? null,
   licenseFile ? null,
   extraExpectedPaths ? [ ],
   cores ? 8,
@@ -65,6 +71,26 @@ let
       exit 1
     fi
   '';
+
+  flashImageCommand =
+    let
+      flash = {
+        mode = "ASX4";
+      }
+      // flashImage;
+    in
+    lib.escapeShellArgs [
+      "quartus_pfg"
+      "-c"
+      "-o"
+      "device=${flash.device}"
+      "-o"
+      "flash_loader=${flash.flashLoader}"
+      "-o"
+      "mode=${flash.mode}"
+      "${outputDirectory}/${revision}.sof"
+      "${outputDirectory}/${revision}.jic"
+    ];
 in
 import ./mkStagePackage.nix {
   inherit
@@ -72,9 +98,9 @@ import ./mkStagePackage.nix {
     pname
     version
     src
-    buildCommands
     cores
     ;
+  buildCommands = buildCommands ++ lib.optional (flashImage != null) flashImageCommand;
   tools = intelTools.all;
   nativeBuildInputs = [ pkgs.gawk ];
   toolRoots = [ quartusShareRoot ];
@@ -87,7 +113,11 @@ import ./mkStagePackage.nix {
   // env;
   executionKind = "quartus-stage-execution";
   preBuild = outputDirectoryCheck;
-  expectedPaths = [ "${outputDirectory}/${revision}.sof" ] ++ extraExpectedPaths;
+  expectedPaths = [
+    "${outputDirectory}/${revision}.sof"
+  ]
+  ++ lib.optional (flashImage != null) "${outputDirectory}/${revision}.jic"
+  ++ extraExpectedPaths;
   installPaths = [ outputDirectory ];
   checkCommands = lib.optional checkTiming timingCheck;
   description = "Quartus compile of ${project} (${revision})";

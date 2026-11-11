@@ -99,6 +99,16 @@ FPGA_PART_HINT=AGIB027 expect_ok "$bin/program-fpga" "$image"
 expect_record "-c AGI FPGA Development Kit [1-14] -m jtag -o p;$image@1"
 echo "PASS xavier's chain"
 
+# A .jic replaces the flash image, so it needs --write-flash.
+flash="$work/top.jic"
+touch "$flash"
+FPGA_PART_HINT=AGIB027 expect_fail "Pass --write-flash" "$bin/program-fpga" "$flash"
+FPGA_PART_HINT=AGIB027 expect_ok "$bin/program-fpga" --write-flash "$flash"
+expect_record "-c AGI FPGA Development Kit [1-14] -m jtag -o ipv;$flash@1"
+FPGA_PART_HINT=AGIB027 expect_fail "needs a .jic" "$bin/program-fpga" --write-flash "$image"
+FPGA_PART_HINT=AGIB027 expect_fail "unknown option" "$bin/program-fpga" --force "$image"
+echo "PASS flash images"
+
 FPGA_PART_HINT=XCU280 expect_fail "found 0" "$bin/program-fpga" "$image"
 FPGA_PART_HINT=AGIB027 expect_fail "must be a .sof" "$bin/program-fpga" "$work/top.bit"
 expect_fail "FPGA_PART_HINT is required" "$bin/program-fpga" "$image"

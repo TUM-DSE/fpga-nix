@@ -124,10 +124,11 @@ FHS environment built by `mkQuartusShell`, so no host-provided shell is
 needed:
 
 - `quartus`: `quartus_sh`, `quartus_syn`, `quartus_fit`, `quartus_sta`,
-  `quartus_asm`, `quartus_pgm`, `quartus_cpf`, `quartus_eda`,
+  `quartus_asm`, `quartus_pgm`, `quartus_cpf`, `quartus_pfg`, `quartus_eda`,
   `quartus_ipgenerate`, `quartus_pow`, `jtagconfig`, `jtagd`,
   `qsys-generate` and `qsys-script`
-- `program-fpga`, which programs a `.sof` over JTAG with `quartus_pgm`
+- `program-fpga`, which programs a `.sof` over JTAG with `quartus_pgm`, or
+  writes a `.jic` to the board's configuration flash with `--write-flash`
 - `all`, a list of the packages above
 
 As for Xilinx, `FPGA_NIX_QUARTUS_VERSION` must be set and selects the
@@ -138,6 +139,18 @@ chains from `jtagconfig`, needs exactly one device whose name contains
 `FPGA_PART_HINT` (for example `AGIB027`) on the cables matching the optional
 `FPGA_JTAG_TARGET`, and takes a lock per cable. A dev shell should include one
 vendor's tool set, since both provide `program-fpga`.
+
+A `.sof` configures the FPGA until it powers off. To keep a design across power
+cycles, for example so that a PCIe design is up when the host boots, write a
+flash image instead:
+
+```sh
+program-fpga --write-flash output_files/my_design.jic
+```
+
+This replaces the image the board loads from its flash, so it is never done
+without `--write-flash`. The FPGA loads the new image on its next
+configuration, for example after a power cycle.
 
 For FPGA designs with PCIe, pass the Intel vendor IDs to `mkHostTools`, for
 example `fpgaPciVendors = [ "0x1172" ]` (`0x1172` is the default vendor ID of
@@ -165,6 +178,12 @@ it is missing and fails when the project uses another directory than
 analysis, clock and operating condition into
 `output_files/<revision>.slack.txt`. The stage fails on negative slack or when
 no clock is constrained, unless `checkTiming = false`.
+
+With `flashImage = { device = "MT25QU02G"; flashLoader = "<FPGA part>"; }` the
+stage also writes `output_files/<revision>.jic` with `quartus_pfg`. `mode`
+defaults to `"ASX4"` and must match the project's `CONFIGURATION_SCHEME`;
+`quartus_pfg` rejects a `.sof` compiled for another scheme. `quartus_pfg` only
+supports devices with a Secure Device Manager, such as Agilex and Stratix 10.
 
 Quartus Prime Pro needs a license for most device families. Without one,
 synthesis fails with "No license for family ...". Cyclone 10 GX needs no

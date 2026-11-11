@@ -120,7 +120,7 @@ let
       mkdir -p "$(dirname "$1")"
       install -m755 ${./intel-fixture-tool.sh} "$1"
     }
-    for name in quartus_sh quartus_syn quartus_sta quartus_pgm jtagconfig; do
+    for name in quartus_sh quartus_syn quartus_sta quartus_pgm quartus_pfg jtagconfig; do
       tool "$out/24.1/quartus/bin/$name"
     done
     tool "$out/24.1/qsys/bin/qsys-generate"
@@ -316,6 +316,28 @@ in
     env.FIXTURE_SLACK = "";
     checkTiming = false;
   };
+
+  quartus-flash-image =
+    let
+      stage = mkQuartusStage {
+        flashImage = {
+          device = "MT25QU02G";
+          flashLoader = "AGIB027R29A1E2VR3";
+        };
+      };
+    in
+    pkgs.runCommand "fpga-nix-quartus-flash-image" { } ''
+      test -f ${stage}/output_files/counter.sof
+      diff - ${stage}/output_files/counter.jic <<'EOF'
+      -o
+      device=MT25QU02G
+      -o
+      flash_loader=AGIB027R29A1E2VR3
+      -o
+      mode=ASX4
+      EOF
+      touch "$out"
+    '';
 
   quartus-shell = fpgaNixLib.mkQuartusShell { inherit pkgs; };
 }

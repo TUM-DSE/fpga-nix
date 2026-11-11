@@ -1,23 +1,39 @@
 usage() {
   echo "Usage: program-fpga image.sof" >&2
+  echo "       program-fpga --write-flash image.jic" >&2
   echo "Program an Intel FPGA over JTAG with quartus_pgm. Pass the image path" >&2
   echo "explicitly or set FPGA_BITSTREAM. FPGA_PART_HINT selects the device on" >&2
   echo "the JTAG chain and the optional FPGA_JTAG_TARGET selects the cable." >&2
+  echo "A .sof configures the FPGA until power-off. A .jic replaces the image in" >&2
+  echo "the board's configuration flash, so it needs --write-flash." >&2
 }
 
-case "${1:-}" in
-  -h | --help)
-    usage
-    exit 0
-    ;;
-esac
+write_flash=0
+image=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    --write-flash) write_flash=1 ;;
+    -*)
+      echo "ERROR: unknown option: $1" >&2
+      usage
+      exit 1
+      ;;
+    *)
+      if [ -n "$image" ]; then
+        usage
+        exit 1
+      fi
+      image="$1"
+      ;;
+  esac
+  shift
+done
 
-if [ $# -gt 1 ]; then
-  usage
-  exit 1
-fi
-
-image="${1:-${FPGA_BITSTREAM:-}}"
+image="${image:-${FPGA_BITSTREAM:-}}"
 part_hint="${FPGA_PART_HINT:-}"
 target_hint="${FPGA_JTAG_TARGET:-}"
 
@@ -31,9 +47,25 @@ if [ -z "$part_hint" ]; then
   exit 1
 fi
 case "$image" in
-  *.sof) ;;
+  *.sof)
+    if [ "$write_flash" = 1 ]; then
+      echo "ERROR: --write-flash needs a .jic flash image, not a .sof" >&2
+      exit 1
+    fi
+    # Configure the FPGA directly.
+    operation=p
+    ;;
+  *.jic)
+    if [ "$write_flash" != 1 ]; then
+      echo "ERROR: $image would replace the image in the board's configuration" \
+        "flash. Pass --write-flash to do that." >&2
+      exit 1
+    fi
+    # Initialize the serial flash loader bridge, program and verify.
+    operation=ipv
+    ;;
   *)
-    echo "ERROR: image must be a .sof file: $image" >&2
+    echo "ERROR: image must be a .sof or, with --write-flash, a .jic: $image" >&2
     exit 1
     ;;
 esac
@@ -101,5 +133,13 @@ printf 'user=%s\npid=%s\n' "$(id -un 2>/dev/null || id -u)" "$$" >"$lock_dir/inf
 trap 'rm -rf "$lock_dir"' EXIT
 trap 'exit 130' INT TERM
 
-echo "Programming $device (position $position) on '$cable' with $image"
-quartus_pgm -c "$cable" -m jtag -o "p;$image@$position"
+if [ "$operation" = p ]; then
+  echo "Programming $device (position $position) on '$cable' with $image"
+else
+  echo "Writing $image to the flash of $device (position $position) on '$cable'"
+fi
+quartus_pgm -c "$cable" -m jtag -o "$operation;$image@$position"
+if [ "$operation" != p ]; then
+  echo "The FPGA loads the new flash image on its next configuration, for example" \
+    "after a power cycle."
+fi

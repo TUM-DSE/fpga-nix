@@ -54,6 +54,7 @@ let
     "quartus_asm"
     "quartus_pgm"
     "quartus_cpf"
+    "quartus_pfg"
     "quartus_eda"
     "quartus_ipgenerate"
     "quartus_pow"

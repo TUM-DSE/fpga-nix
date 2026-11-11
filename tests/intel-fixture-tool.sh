@@ -29,6 +29,14 @@ case "$tool" in
       exit "${FIXTURE_COMPILE_STATUS:-0}"
     fi
     ;;
+  quartus_pfg)
+    if [ "${1:-}" = -c ]; then
+      # Record the options in the output file, the last argument.
+      [ -f "${*: -2:1}" ] || exit 2
+      printf '%s\n' "${@:2:$#-3}" >"${*: -1}"
+      exit 0
+    fi
+    ;;
   quartus_sta)
     if [ "${1:-}" = -t ]; then
       # Arguments: -t <script> <project> <revision> <output>. The real
