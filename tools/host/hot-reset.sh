@@ -129,8 +129,10 @@ validate_reset_domain() {
       fail "reset domain function $name is driver-bound"
     vendor="$(<"$path/vendor")"
     class="$(<"$path/class")"
-    is_fpga_vendor "$vendor" && [[ "$class" =~ ^0x[[:xdigit:]]{6}$ && "$class" != 0x06* ]] ||
+    if ! is_fpga_vendor "$vendor" ||
+      [[ ! "$class" =~ ^0x[[:xdigit:]]{6}$ || "$class" == 0x06* ]]; then
       fail "non-FPGA endpoint $name in reset domain"
+    fi
     if pci_rescan_enabled; then
       [[ -e "$path/remove" ]] || fail "function $name cannot be removed"
     fi

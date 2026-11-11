@@ -33,6 +33,10 @@ let
       inherit name;
       # Wrappers re-exec into xilinx-shell, which needs the caller's PATH.
       inheritPath = true;
+      # fpga-nix lints its scripts in its own shellcheck check. Consumers
+      # only syntax-check them, so a different shellcheck version in their
+      # nixpkgs cannot break the build.
+      checkPhase = "${pkgs.stdenv.shellDryRun} \"$target\"";
       runtimeInputs = [
         pkgs.coreutils
         pkgs.gawk
@@ -144,6 +148,7 @@ rec {
     ];
     # vivado and hw_server re-exec into xilinx-shell, which needs PATH.
     inheritPath = true;
+    checkPhase = "${pkgs.stdenv.shellDryRun} \"$target\"";
     text = ''
       # shellcheck source=/dev/null
       source ${wrapperLib}

@@ -58,7 +58,8 @@ hw_server_url="localhost:$hw_server_port"
 lock_dir="$(fpga_nix_env_or PROGRAM_LOCK_DIR "/tmp/fpga-nix-program-$hw_server_port.lock")"
 lock_acquired=0
 
-# shellcheck disable=SC2329 # Called through the EXIT trap below.
+# Called through the EXIT trap below. Older shellcheck reports this as SC2317.
+# shellcheck disable=SC2317,SC2329
 cleanup() {
   if [ -n "$vivado_pid" ] && kill -0 "$vivado_pid" 2>/dev/null; then
     kill "$vivado_pid" 2>/dev/null || true

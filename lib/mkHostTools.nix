@@ -19,6 +19,10 @@ let
       inherit name runtimeInputs;
       # The tools call sudo, which must come from the host.
       inheritPath = true;
+      # fpga-nix lints its scripts in its own shellcheck check. Consumers
+      # only syntax-check them, so a different shellcheck version in their
+      # nixpkgs cannot break the build.
+      checkPhase = "${pkgs.stdenv.shellDryRun} \"$target\"";
       text =
         let
           placeholders = builtins.attrNames substitutions;
