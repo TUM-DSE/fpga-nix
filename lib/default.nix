@@ -8,6 +8,7 @@
   mkQuartusShell = import ./mkQuartusShell.nix;
   mkIntelTools = import ./mkIntelTools.nix;
   mkQuartusStagePackage = import ./mkQuartusStagePackage.nix;
+  mkQuartusLicenseRelay = import ./mkQuartusLicenseRelay.nix;
 
   # Shell library with the stage runtime, for frameworks with their own runner.
   stageLib = ../tools/stage/stage-lib.sh;
