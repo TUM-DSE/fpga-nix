@@ -28,6 +28,9 @@
   # CONFIGURATION_SCHEME, or quartus_pfg rejects the .sof.
   flashImage ? null,
   licenseFile ? null,
+  # Floating licenses through the build host's relay, as
+  # { socketDir, ports ? [ 27010 27011 ] }; see mkQuartusLicenseRelay.
+  licenseRelay ? null,
   extraExpectedPaths ? [ ],
   cores ? 8,
   env ? { },
@@ -35,6 +38,17 @@
 }:
 let
   inherit (pkgs) lib;
+
+  relay =
+    if licenseRelay == null then
+      {
+        toolRoots = [ ];
+        nativeBuildInputs = [ ];
+        env = { };
+        preBuild = "";
+      }
+    else
+      import ./mkQuartusLicenseRelay.nix ({ inherit pkgs; } // licenseRelay);
 
   slackFile = "${outputDirectory}/${revision}.slack.txt";
 
@@ -92,6 +106,9 @@ let
       "${outputDirectory}/${revision}.jic"
     ];
 in
+assert lib.assertMsg (
+  licenseFile == null || licenseRelay == null
+) "mkQuartusStagePackage: set licenseFile or licenseRelay, not both";
 import ./mkStagePackage.nix {
   inherit
     pkgs
@@ -102,17 +119,18 @@ import ./mkStagePackage.nix {
     ;
   buildCommands = buildCommands ++ lib.optional (flashImage != null) flashImageCommand;
   tools = intelTools.all;
-  nativeBuildInputs = [ pkgs.gawk ];
-  toolRoots = [ quartusShareRoot ];
+  nativeBuildInputs = [ pkgs.gawk ] ++ relay.nativeBuildInputs;
+  toolRoots = [ quartusShareRoot ] ++ relay.toolRoots;
   env = {
     FPGA_NIX_QUARTUS_VERSION = quartusVersion;
   }
   // lib.optionalAttrs (licenseFile != null) {
     FPGA_NIX_QUARTUS_LICENSE_FILE = toString licenseFile;
   }
+  // relay.env
   // env;
   executionKind = "quartus-stage-execution";
-  preBuild = outputDirectoryCheck;
+  preBuild = relay.preBuild + outputDirectoryCheck;
   expectedPaths = [
     "${outputDirectory}/${revision}.sof"
   ]

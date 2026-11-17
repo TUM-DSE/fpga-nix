@@ -29,6 +29,7 @@ fpga-nix.lib.mkDevShell
 fpga-nix.lib.mkQuartusShell
 fpga-nix.lib.mkIntelTools
 fpga-nix.lib.mkQuartusStagePackage
+fpga-nix.lib.mkQuartusLicenseRelay
 ```
 
 ### mkXilinxTools
@@ -191,6 +192,36 @@ supports devices with a Secure Device Manager, such as Agilex and Stratix 10.
 Quartus Prime Pro needs a license for most device families. Without one,
 synthesis fails with "No license for family ...". Cyclone 10 GX needs no
 license and is useful for testing the flow.
+
+### Floating licenses: licenseRelay
+
+```nix
+fpga-nix.lib.mkQuartusStagePackage {
+  # ...
+  licenseRelay = {
+    socketDir = "/run/intel-fpga-license";
+    ports = [ 27010 27011 ]; # the default
+  };
+}
+```
+
+A node-locked license only works where the build can see the licensed NIC,
+and a sandboxed build sees none. A floating license needs the license server,
+which a sandboxed build cannot reach either. `licenseRelay` keeps the sandbox
+intact: the build host exposes each server port as a Unix socket
+`<socketDir>/<port>.sock` and has `socketDir` in `extra-sandbox-paths`. Inside
+the build, `socat` listens on `127.0.0.1:<port>` for each port and forwards to
+the sockets, and Quartus uses `<first port>@localhost`.
+
+The first port is lmgrd's. The vendor daemons' ports, such as alterad's for
+Quartus, must follow: clients connect to them on the same host. The license
+server therefore needs fixed vendor daemon ports (`VENDOR alterad ...
+PORT=<port>`). `licenseRelay` and `licenseFile` exclude each other.
+
+`fpga-nix.lib.mkQuartusLicenseRelay { pkgs, socketDir, ports }` returns the
+`toolRoots`, `nativeBuildInputs`, `env` and `preBuild` for frameworks that call
+`mkStagePackage` themselves. The relay sets the shell's `EXIT` trap to stop its
+listeners.
 
 ## Vendor tools and the build sandbox
 

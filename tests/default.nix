@@ -340,4 +340,35 @@ in
     '';
 
   quartus-shell = fpgaNixLib.mkQuartusShell { inherit pkgs; };
+
+  license-relay = pkgs.runCommand "fpga-nix-license-relay" { buildInputs = [ pkgs.socat ]; } ''
+    # A relay that the runner's wait waits for would hang the build.
+    timeout 60 bash ${./license-relay.sh} ${../tools/intel/license-relay.sh}
+    touch "$out"
+  '';
+
+  # The relay's sockets live outside the store, so a stage cannot run with it
+  # here. Check that it points Quartus at the local listener instead.
+  quartus-license-relay-stage =
+    let
+      stage = mkQuartusStage {
+        licenseRelay = {
+          socketDir = "/run/fpga-license";
+          ports = [
+            27000
+            27001
+          ];
+        };
+      };
+    in
+    assert stage.FPGA_NIX_QUARTUS_LICENSE_FILE == "27000@localhost";
+    assert lib.any (input: lib.getName input == "socat") stage.nativeBuildInputs;
+    pkgs.runCommand "fpga-nix-quartus-license-relay-stage" { } ''
+      touch "$out"
+    '';
+
+  quartus-license-relay-not-visible =
+    expectQuartusFailure "license-relay-not-visible"
+      "vendor tool root /nonexistent/fpga-license is not visible"
+      { licenseRelay.socketDir = "/nonexistent/fpga-license"; };
 }
